@@ -1,0 +1,100 @@
+services:
+  flight-postgres:
+    image: postgres:16.6-alpine
+    environment: {POSTGRES_DB: flight, POSTGRES_USER: flight, POSTGRES_PASSWORD: flight_demo, TZ: UTC}
+    volumes: [flight-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U flight -d flight"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  booking-postgres:
+    image: postgres:16.6-alpine
+    environment: {POSTGRES_DB: booking, POSTGRES_USER: booking, POSTGRES_PASSWORD: booking_demo, TZ: UTC}
+    volumes: [booking-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U booking -d booking"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  redis-master:
+    image: redis:7.4.1-alpine
+    command: [redis-server, /etc/redis/master.conf]
+    volumes: ["./infra/redis/master.conf:/etc/redis/master.conf:ro", redis-master-data:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  redis-replica:
+    image: redis:7.4.1-alpine
+    command: [redis-server, /etc/redis/replica.conf]
+    volumes: ["./infra/redis/replica.conf:/etc/redis/replica.conf:ro", redis-replica-data:/data]
+    depends_on:
+      redis-master: {condition: service_healthy}
+    healthcheck:
+      test: [CMD-SHELL, "redis-cli info replication | grep -q 'master_link_status:up'"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  redis-sentinel:
+    image: redis:7.4.1-alpine
+    command: [sh, -c, "cp /etc/redis/sentinel.conf /data/sentinel.conf && redis-server /data/sentinel.conf --sentinel"]
+    volumes: ["./infra/redis/sentinel.conf:/etc/redis/sentinel.conf:ro", sentinel-data:/data]
+    depends_on:
+      redis-replica: {condition: service_healthy}
+    healthcheck:
+      test: [CMD-SHELL, "redis-cli -p 26379 sentinel get-master-addr-by-name mymaster | grep -q 6379"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  flight-service:
+    build:
+      context: .
+      args: {SERVICE: flight-service}
+    environment:
+      DB_URL: jdbc:postgresql://flight-postgres:5432/flight
+      DB_USER: flight
+      DB_PASSWORD: flight_demo
+      GRPC_API_KEY: ${GRPC_API_KEY:-local-demo-key-change-for-deployment}
+      REDIS_SENTINEL_MASTER: mymaster
+      REDIS_SENTINEL_NODES: redis-sentinel:26379
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-600}
+    ports: ["9090:9090"]
+    depends_on:
+      flight-postgres: {condition: service_healthy}
+      redis-sentinel: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:8081/actuator/health]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  booking-service:
+    build:
+      context: .
+      args: {SERVICE: booking-service}
+    environment:
+      DB_URL: jdbc:postgresql://booking-postgres:5432/booking
+      DB_USER: booking
+      DB_PASSWORD: booking_demo
+      GRPC_HOST: flight-service
+      GRPC_API_KEY: ${GRPC_API_KEY:-local-demo-key-change-for-deployment}
+      GRPC_DEADLINE_MS: ${GRPC_DEADLINE_MS:-1000}
+      GRPC_BACKOFF_MS: ${GRPC_BACKOFF_MS:-100}
+      CB_FAILURE_THRESHOLD: ${CB_FAILURE_THRESHOLD:-5}
+      CB_OPEN_MILLIS: ${CB_OPEN_MILLIS:-10000}
+    ports: ["8080:8080"]
+    depends_on:
+      booking-postgres: {condition: service_healthy}
+      flight-service: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:8080/actuator/health]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+volumes:
+  flight-data:
+  booking-data:
+  redis-master-data:
+  redis-replica-data:
+  sentinel-data:

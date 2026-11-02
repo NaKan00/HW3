@@ -1,0 +1,28 @@
+syntax = "proto3";
+package flight.v1;
+option java_package = "edu.hw3.contract";
+option java_multiple_files = true;
+import "google/protobuf/timestamp.proto";
+service FlightService {
+ rpc SearchFlights(SearchFlightsRequest) returns (SearchFlightsResponse);
+ rpc GetFlight(GetFlightRequest) returns (Flight);
+ rpc ReserveSeats(ReserveSeatsRequest) returns (Reservation);
+ rpc ReleaseReservation(ReleaseReservationRequest) returns (Reservation);
+ rpc UpdateFlight(UpdateFlightRequest) returns (Flight);
+}
+enum FlightStatus { FLIGHT_STATUS_UNSPECIFIED = 0; SCHEDULED = 1; DEPARTED = 2; CANCELLED = 3; COMPLETED = 4; }
+enum ReservationStatus { RESERVATION_STATUS_UNSPECIFIED = 0; ACTIVE = 1; RELEASED = 2; EXPIRED = 3; }
+message Money { int64 amount_minor = 1; string currency = 2; }
+message Flight {
+ string id = 1; string flight_number = 2; string airline = 3;
+ string origin = 4; string destination = 5;
+ google.protobuf.Timestamp departure_time = 6; google.protobuf.Timestamp arrival_time = 7;
+ int32 total_seats = 8; int32 available_seats = 9; Money price = 10; FlightStatus status = 11;
+}
+message SearchFlightsRequest { string origin = 1; string destination = 2; string date = 3; }
+message SearchFlightsResponse { repeated Flight flights = 1; }
+message GetFlightRequest { string id = 1; }
+message ReserveSeatsRequest { string booking_id = 1; string flight_id = 2; int32 seat_count = 3; }
+message ReleaseReservationRequest { string booking_id = 1; }
+message Reservation { string id = 1; string booking_id = 2; string flight_id = 3; int32 seat_count = 4; ReservationStatus status = 5; }
+message UpdateFlightRequest { string id = 1; google.protobuf.Timestamp departure_time = 2; google.protobuf.Timestamp arrival_time = 3; Money price = 4; FlightStatus status = 5; }
