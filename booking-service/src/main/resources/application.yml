@@ -1,0 +1,32 @@
+server:
+  port: 8080
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5434/booking}
+    username: ${DB_USER:booking}
+    password: ${DB_PASSWORD:booking_demo}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+management:
+  endpoints.web.exposure.include: health,info
+  endpoint.health.show-details: always
+  health.redis.enabled: false
+grpc:
+  api-key: ${GRPC_API_KEY}
+  port: ${GRPC_PORT:9090}
+  host: ${GRPC_HOST:localhost}
+  deadline-ms: ${GRPC_DEADLINE_MS:1000}
+  backoff-ms: ${GRPC_BACKOFF_MS:100}
+  cb-failure-threshold: ${CB_FAILURE_THRESHOLD:5}
+  cb-open-millis: ${CB_OPEN_MILLIS:10000}
+cache:
+  ttl-seconds: ${CACHE_TTL_SECONDS:600}
+redis:
+  sentinel-master: ${REDIS_SENTINEL_MASTER:mymaster}
+  sentinel-nodes: ${REDIS_SENTINEL_NODES:localhost:26379}
